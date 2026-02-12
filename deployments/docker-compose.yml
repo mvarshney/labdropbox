@@ -29,7 +29,7 @@ services:
     ports:
       - "4000:4000"  # MySQL protocol port
     command:
-      - --store=mocktikv
+      - --store=unistore
       - --path=/tmp/tidb
     volumes:
       - tidb-data:/tmp/tidb
