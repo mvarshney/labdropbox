@@ -73,7 +73,9 @@ docker-logs:
 # Run database migrations
 migrate:
 	@echo "Running database migrations..."
-	@docker exec -i labdropbox-tidb mysql -h 127.0.0.1 -P 4000 -u root < migrations/001_init_schema.sql
+	@docker run --rm -i --network deployments_labdropbox-network \
+		-v $(PWD)/migrations:/migrations \
+		mysql:8.0 mysql -h tidb -P 4000 -u root < migrations/001_init_schema.sql
 	@echo "Migrations complete"
 
 # Deploy to Kubernetes
