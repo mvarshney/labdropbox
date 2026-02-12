@@ -1,0 +1,88 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tidb-init-sql
+data:
+  001_init_schema.sql: |
+    CREATE DATABASE IF NOT EXISTS labdropbox DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+    USE labdropbox;
+
+    CREATE TABLE IF NOT EXISTS files (
+        id VARCHAR(36) PRIMARY KEY,
+        name VARCHAR(512) NOT NULL,
+        size BIGINT NOT NULL,
+        chunk_count INT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_name (name),
+        INDEX idx_created_at (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+    CREATE TABLE IF NOT EXISTS chunks (
+        id VARCHAR(36) PRIMARY KEY,
+        file_id VARCHAR(36) NOT NULL,
+        order_index INT NOT NULL,
+        hash VARCHAR(64) NOT NULL,
+        minio_object_key VARCHAR(512) NOT NULL,
+        size BIGINT NOT NULL,
+        FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE,
+        UNIQUE KEY idx_file_order (file_id, order_index),
+        INDEX idx_file_id (file_id),
+        INDEX idx_hash (hash)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tidb-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: tidb
+spec:
+  serviceName: tidb
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tidb
+  template:
+    metadata:
+      labels:
+        app: tidb
+    spec:
+      containers:
+      - name: tidb
+        image: pingcap/tidb:latest
+        args:
+        - --store=mocktikv
+        - --path=/tmp/tidb
+        ports:
+        - containerPort: 4000
+          name: mysql
+        volumeMounts:
+        - name: data
+          mountPath: /tmp/tidb
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: tidb-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tidb
+spec:
+  type: ClusterIP
+  selector:
+    app: tidb
+  ports:
+  - name: mysql
+    port: 4000
+    targetPort: 4000
